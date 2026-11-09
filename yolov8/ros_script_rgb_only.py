@@ -8,8 +8,9 @@ import numpy as np
 import cv2
 import sys
 
-# RGB-only detection (no depth, no 6D pose): runs continuously on every received frame
-# Without depth, the published pose is the direction of the box center: back-projected at 1 m depth (Z=1), identity orientation
+# RGB-only detection (no depth sensor): runs continuously on every received frame
+# The shelf position is recovered from its known height, assuming it stands upright and parallel to the camera's vertical axis
+# The orientation cannot be observed from a bounding box: the published pose has identity orientation (camera optical frame)
 # Usage: python yolov8/ros_script_rgb_only.py [image_topic] [weights]
 
 classesDict = dict()
@@ -19,6 +20,8 @@ rgb_image_topic = sys.argv[1] if len(sys.argv) > 1 else '/insta360/left/image_ra
 weights = sys.argv[2] if len(sys.argv) > 2 else 'yolov8/trained_models/shelf/best.pt'
 camera_info_topic = rgb_image_topic.rsplit('/', 1)[0] + '/camera_info'
 confidence_threshold = 0.3
+shelf_height = 1.5 #meters
+border_margin = 2 #pixels, a box this close to the top/bottom of the image is considered truncated
 
 output_topic_prefix = '/object_detection/'
 pose_topic_prefix = '/object_pose_initialization/'
@@ -46,6 +49,17 @@ def pixel_to_ray(u, v):
         x, y = cv2.undistortPoints(point, K, D).ravel()
     return x, y
 
+def estimate_position(x1, y1, x2, y2):
+    #the top and bottom edges of the box are the top and bottom of the shelf: their vertical
+    #distance in normalized coordinates is shelf_height / Z. Returns (X, Y, Z) of the shelf center in meters
+    u = (x1 + x2) / 2
+    x_top, y_top = pixel_to_ray(u, y1)
+    x_bottom, y_bottom = pixel_to_ray(u, y2)
+    if not y_bottom - y_top > 0:
+        return None
+    Z = shelf_height / (y_bottom - y_top)
+    return (x_top + x_bottom) / 2 * Z, (y_top + y_bottom) / 2 * Z, Z
+
 def rgb_callback(data):
     try:
         rgb_data = bridge.imgmsg_to_cv2(data, "bgr8")
@@ -68,14 +82,22 @@ def rgb_callback(data):
         if camera_info is None:
             node.get_logger().warn(f'No message on {camera_info_topic} yet, pose not published', throttle_duration_sec=5.0)
             continue
-        X, Y = pixel_to_ray((x1 + x2) / 2, (y1 + y2) / 2)
+        if y1 <= border_margin or y2 >= data.height - 1 - border_margin:
+            node.get_logger().warn(f'{objectClass} cut by the top/bottom of the image, pose not published', throttle_duration_sec=5.0)
+            continue
+        position = estimate_position(x1, y1, x2, y2)
+        if position is None:
+            node.get_logger().warn(f'Invalid back-projection of the {objectClass} box, pose not published', throttle_duration_sec=5.0)
+            continue
+        X, Y, Z = position
         pose = PoseStamped()
         pose.header = data.header
         pose.pose.position.x = float(X)
         pose.pose.position.y = float(Y)
-        pose.pose.position.z = 1.0
+        pose.pose.position.z = float(Z)
         pose.pose.orientation.w = 1.0
         pub_dict[int(cls.item())].publish(pose)
+        node.get_logger().info(f'{objectClass} position: X={X:.2f} m, Y={Y:.2f} m, Z={Z:.2f} m')
     if detected_objects_txt:
         node.get_logger().info('Detected:\n' + detected_objects_txt.strip())
 
