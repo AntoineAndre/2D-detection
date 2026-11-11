@@ -7,11 +7,13 @@ from std_msgs.msg import Bool, String, Float64
 import numpy as np
 import message_filters
 import os
+import tf_transformations
 
 # RGB-only detection on a raw (non compressed) equirectangular (360°) image stream, triggered by /start_detection_command
 # No depth camera: the shelf position is recovered from its known height, assuming it stands upright
-# (parallel to the camera's vertical axis). The orientation cannot be observed from a bounding box:
-# the published pose has identity orientation, expressed in the camera optical frame (x right, y down, z forward)
+# (parallel to the camera's vertical axis). The orientation cannot be observed from a bounding box, so the pose
+# starts with an identity orientation, expressed in the camera optical frame (x right, y down, z forward),
+# then is re-expressed in the "equi" frame via the quat/equiMpc transforms before being published
 
 classesDict = dict()
 #classesDict[0] = 'CupNoodles'
@@ -29,6 +31,14 @@ shelf_height = 1.5 #meters
 border_margin = 2 #pixels, a box this close to the top/bottom of the image is considered truncated
 
 output_topic_prefix = '/object_pose_initialization/'
+
+# homogeneous transform mapping the "pc" frame into the "equi" (equirectangular camera) frame
+equiMpc = np.array([
+    [ 0.953679, -0.157695, 0.256183, 0.116029],
+    [ 0.100186,  0.969471, 0.223806, 0.1111  ],
+    [-0.283655, -0.187773, 0.940362, 0.217358],
+    [ 0.0,       0.0,       0.0,     1.0     ],
+])
 
 bridge = CvBridge()
 model = YOLO(weights)
@@ -102,20 +112,27 @@ def process_image(rgb_data, header):
         X, Y, Z = position
 
         #quat = np.array([0.6129531264305115, 0.6196120977401733, -0.3606013059616089, 0.3321303129196167])
+        #rotation of 0.5 rad around the x axis, used to change the pose's frame
         quat = np.array([0.9537, 0.0, 0.0, 0.3007])
+
+        # the shelf pose, as a homogeneous matrix (translation only: the orientation is not observed, so it's left as identity)
+        pose_matrix = tf_transformations.translation_matrix([float(X) - 0.6, float(Y) + shelf_height / 2.0, float(Z)])
+        quat_matrix = tf_transformations.quaternion_matrix(quat)
+        # successively change the pose's reference frame: first by quat, then by equiMpc
+        result_matrix = tf_transformations.concatenate_matrices(equiMpc, quat_matrix, pose_matrix)
+        result_position = tf_transformations.translation_from_matrix(result_matrix)
+        result_quat = tf_transformations.quaternion_from_matrix(result_matrix)
 
         # publish the result to the output topic
         pose = PoseStamped()
         pose.header = header
-        pose.pose.position.x = float(X) - 0.6
-        pose.pose.position.y = float(Y) + shelf_height/2.0 
-        pose.pose.position.z = float(Z)
-        pose.pose.orientation.x = quat[0]
-        pose.pose.orientation.y = quat[1]
-        pose.pose.orientation.z = quat[2]
-        pose.pose.orientation.w = quat[3]
-
-        #pose.pose.orientation.w = 1.0
+        pose.pose.position.x = float(result_position[0])
+        pose.pose.position.y = float(result_position[1])
+        pose.pose.position.z = float(result_position[2])
+        pose.pose.orientation.x = float(result_quat[0])
+        pose.pose.orientation.y = float(result_quat[1])
+        pose.pose.orientation.z = float(result_quat[2])
+        pose.pose.orientation.w = float(result_quat[3])
         pub_dict[objectClass_id].publish(pose)
         node.get_logger().info('Object detected: %s' % objectClass)
         node.get_logger().info('Confidence: %f' % confidence)
