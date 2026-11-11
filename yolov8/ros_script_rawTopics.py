@@ -22,7 +22,7 @@ classesDict = dict()
 # classesDict[1] = 'BoxNoLid'
 classesDict[0] = 'shelf'
 
-rgb_image_topic = '/insta360/equi/image_raw'
+rgb_image_topic = '/webrtc/image_raw'
 weights = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trained_models', 'shelf', 'best.pt')
 confidence_threshold = 0.3
 shelf_height = 1.5 #meters
@@ -101,13 +101,21 @@ def process_image(rgb_data, header):
             continue
         X, Y, Z = position
 
+        #quat = np.array([0.6129531264305115, 0.6196120977401733, -0.3606013059616089, 0.3321303129196167])
+        quat = np.array([0.9537, 0.0, 0.0, 0.3007])
+
         # publish the result to the output topic
         pose = PoseStamped()
         pose.header = header
-        pose.pose.position.x = float(X)
-        pose.pose.position.y = float(Y)
+        pose.pose.position.x = float(X) - 0.6
+        pose.pose.position.y = float(Y) + shelf_height/2.0 
         pose.pose.position.z = float(Z)
-        pose.pose.orientation.w = 1.0
+        pose.pose.orientation.x = quat[0]
+        pose.pose.orientation.y = quat[1]
+        pose.pose.orientation.z = quat[2]
+        pose.pose.orientation.w = quat[3]
+
+        #pose.pose.orientation.w = 1.0
         pub_dict[objectClass_id].publish(pose)
         node.get_logger().info('Object detected: %s' % objectClass)
         node.get_logger().info('Confidence: %f' % confidence)
@@ -134,7 +142,7 @@ def listener():
     # create a publisher for the output topic for each object class
     for objectClass_id in classesDict:
         objectClass = classesDict[objectClass_id]
-        output_topic = output_topic_prefix + objectClass
+        output_topic = output_topic_prefix + "Shelf" 
         pub = node.create_publisher(PoseStamped, output_topic, 1)
         pub_dict[objectClass_id] = pub
 

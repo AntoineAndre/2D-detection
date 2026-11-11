@@ -1,4 +1,4 @@
-name: yolo
+name: yoloShelf
 channels:
   - defaults
   - conda-forge

@@ -16,7 +16,7 @@ import sys
 classesDict = dict()
 classesDict[0] = 'shelf'
 
-rgb_image_topic = sys.argv[1] if len(sys.argv) > 1 else '/insta360/left/image_raw'
+rgb_image_topic = sys.argv[1] if len(sys.argv) > 1 else '/webrtc/image_raw'
 weights = sys.argv[2] if len(sys.argv) > 2 else 'yolov8/trained_models/shelf/best.pt'
 camera_info_topic = rgb_image_topic.rsplit('/', 1)[0] + '/camera_info'
 confidence_threshold = 0.3
