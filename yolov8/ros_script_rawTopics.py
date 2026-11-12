@@ -113,13 +113,16 @@ def process_image(rgb_data, header):
 
         #quat = np.array([0.6129531264305115, 0.6196120977401733, -0.3606013059616089, 0.3321303129196167])
         #rotation of 0.5 rad around the x axis, used to change the pose's frame
-        quat = np.array([0.9537, 0.0, 0.0, 0.3007])
+        quat = np.array([0.0, 0.0, 0.0, 1.0])
+
+        
 
         # the shelf pose, as a homogeneous matrix (translation only: the orientation is not observed, so it's left as identity)
         pose_matrix = tf_transformations.translation_matrix([float(X) - 0.6, float(Y) + shelf_height / 2.0, float(Z)])
         quat_matrix = tf_transformations.quaternion_matrix(quat)
         # successively change the pose's reference frame: first by quat, then by equiMpc
-        result_matrix = tf_transformations.concatenate_matrices(equiMpc, quat_matrix, pose_matrix)
+        pcMequi = np.linalg.inv(equiMpc)
+        result_matrix = tf_transformations.concatenate_matrices(pcMequi, quat_matrix, pose_matrix)
         result_position = tf_transformations.translation_from_matrix(result_matrix)
         result_quat = tf_transformations.quaternion_from_matrix(result_matrix)
         # additional -90 degrees rotation around the pose's own x axis
