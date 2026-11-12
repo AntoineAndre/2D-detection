@@ -122,6 +122,8 @@ def process_image(rgb_data, header):
         result_matrix = tf_transformations.concatenate_matrices(equiMpc, quat_matrix, pose_matrix)
         result_position = tf_transformations.translation_from_matrix(result_matrix)
         result_quat = tf_transformations.quaternion_from_matrix(result_matrix)
+        # additional -90 degrees rotation around the pose's own x axis
+        result_quat = tf_transformations.quaternion_multiply(result_quat, tf_transformations.quaternion_about_axis(-np.pi / 2, [1, 0, 0]))
 
         # publish the result to the output topic
         pose = PoseStamped()
