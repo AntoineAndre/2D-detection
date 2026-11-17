@@ -125,14 +125,30 @@ def process_image(rgb_data, header):
         result_position = tf_transformations.translation_from_matrix(result_matrix)
         result_quat = tf_transformations.quaternion_from_matrix(result_matrix)
         # additional -90 degrees rotation around the pose's own x axis
-        result_quat = tf_transformations.quaternion_multiply(result_quat, tf_transformations.quaternion_about_axis(-np.pi / 2, [1, 0, 0]))
+        result_quat = tf_transformations.quaternion_multiply(quat, tf_transformations.quaternion_about_axis(np.pi / 2 + .5, [1, 0, 0]))
+        # final_quat = tf_transformations.quaternion_multiply(result_quat, [ -0.0655, -0.9827, 0.1046, -0.1373 ]) 
+        
 
         # publish the result to the output topic
         pose = PoseStamped()
         pose.header = header
-        pose.pose.position.x = float(result_position[0])
-        pose.pose.position.y = float(result_position[1])
-        pose.pose.position.z = float(result_position[2])
+        
+        pose.pose.position.x = float(X) - 0.6
+        pose.pose.position.y = float(Y) + 0.2
+        pose.pose.position.z = float(Z) + .5
+
+        # pose.pose.orientation.x = float(final_quat[0])
+        # pose.pose.orientation.y = float(final_quat[1])
+        # pose.pose.orientation.z = float(final_quat[2])
+        # pose.pose.orientation.w = float(final_quat[3])
+        
+        # pose.pose.orientation.x = float(0.0)
+        # pose.pose.orientation.y = float(0.0)
+       # pose.pose.orientation.z = float(0.0)
+        # pose.pose.orientation.w = float(1.0)
+        #pose.pose.position.x = float(result_position[0])
+        #pose.pose.position.y = float(result_position[1])
+        #pose.pose.position.z = float(result_position[2])
         pose.pose.orientation.x = float(result_quat[0])
         pose.pose.orientation.y = float(result_quat[1])
         pose.pose.orientation.z = float(result_quat[2])
