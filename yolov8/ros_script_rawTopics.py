@@ -147,7 +147,7 @@ def process_image(rgb_data, header):
     #(same as: ros2 topic pub --once /end_of_detection std_msgs/msg/String '{"data": "shelf"}')
     if pose_published:
         msg_str = String()
-        msg_str.data = 'shelf'
+        msg_str.data = 'Shelf '
         pub_end.publish(msg_str)
         node.get_logger().info('Sent "shelf" on /end_of_detection')
 
