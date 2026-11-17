@@ -90,7 +90,7 @@ def process_image(rgb_data, header):
     msg.data = duration.nanoseconds / 1e9
     pub_detection_time.publish(msg)
 
-    detected_objects_txt = ''
+    pose_published = False
     for cls, conf, xyxy in zip(results.boxes.cls, results.boxes.conf, results.boxes.xyxy):
         objectClass_id = int(cls.item())
         objectClass = classesDict.get(objectClass_id)
@@ -98,7 +98,6 @@ def process_image(rgb_data, header):
         if objectClass is None:
             print('Warning: object class not found in the dictionary. Check that the model was trained with the same classes as the dictionary.')
             continue
-        detected_objects_txt += objectClass + ' '
         confidence = conf.item()
         x1, y1, x2, y2 = xyxy.cpu().numpy()
 
@@ -139,14 +138,18 @@ def process_image(rgb_data, header):
         pose.pose.orientation.z = float(result_quat[2])
         pose.pose.orientation.w = float(result_quat[3])
         pub_dict[objectClass_id].publish(pose)
+        pose_published = True
         node.get_logger().info('Object detected: %s' % objectClass)
         node.get_logger().info('Confidence: %f' % confidence)
         node.get_logger().info(f'Pose: x={X:.2f} m, y={Y:.2f} m, z={Z:.2f} m')
 
-    #send end of detection signal
-    msg_str = String()
-    msg_str.data = detected_objects_txt
-    pub_end.publish(msg_str)
+    #once the shelf pose has been published, trigger the next step
+    #(same as: ros2 topic pub --once /end_of_detection std_msgs/msg/String '{"data": "shelf"}')
+    if pose_published:
+        msg_str = String()
+        msg_str.data = 'shelf'
+        pub_end.publish(msg_str)
+        node.get_logger().info('Sent "shelf" on /end_of_detection')
 
 
 def listener():
